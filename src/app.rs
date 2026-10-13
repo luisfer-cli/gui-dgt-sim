@@ -368,7 +368,8 @@ impl App {
     fn side_panel(&mut self, ui: &mut egui::Ui) {
         egui::Panel::right("side")
             .resizable(true)
-            .default_size(330.0)
+            .default_size(370.0)
+            .max_size(460.0)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
@@ -408,9 +409,6 @@ impl App {
                                 ui.label("Transporte");
                                 ui.label(&snapshot.transport);
                                 ui.end_row();
-                                ui.label("Endpoint");
-                                ui.label(RichText::new(&snapshot.endpoint).monospace());
-                                ui.end_row();
                                 ui.label("Cliente");
                                 ui.label(if snapshot.connected {
                                     snapshot.peer.clone().unwrap_or_else(|| "conectado".into())
@@ -420,9 +418,6 @@ impl App {
                                 ui.end_row();
                                 ui.label("Modo");
                                 ui.label(&snapshot.mode);
-                                ui.end_row();
-                                ui.label("FEN");
-                                ui.label(RichText::new(&snapshot.fen).monospace());
                                 ui.end_row();
                                 ui.label("Mensajes");
                                 ui.label(snapshot.messages_sent.to_string());
@@ -435,6 +430,20 @@ impl App {
                                 ui.end_row();
                             }
                         });
+                    // The endpoint and FEN are long: give each its own line so
+                    // they truncate to the panel width instead of widening it.
+                    if let Some(snapshot) = &tab.snapshot {
+                        ui.add_space(4.0);
+                        ui.label("Endpoint");
+                        ui.add(
+                            egui::Label::new(RichText::new(&snapshot.endpoint).monospace())
+                                .truncate(),
+                        );
+                        ui.label("FEN");
+                        ui.add(
+                            egui::Label::new(RichText::new(&snapshot.fen).monospace()).truncate(),
+                        );
+                    }
                 });
 
             if let Some(err) = &tab.error {
