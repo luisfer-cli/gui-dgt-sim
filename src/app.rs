@@ -294,7 +294,7 @@ impl App {
                     }
                     if ui
                         .selectable_label(self.show_options, "Opciones del tablero")
-                        .on_hover_text("Mostrar u ocultar el panel de opciones")
+                        .on_hover_text("Mostrar u ocultar las opciones del tablero")
                         .clicked()
                     {
                         self.show_options = !self.show_options;
@@ -380,23 +380,27 @@ impl App {
         }
     }
 
-    fn side_panel(&mut self, ui: &mut egui::Ui) {
-        // `show_collapsible` needs `&mut bool`, and the closure borrows `self`,
-        // so the flag is moved out and back.
-        let mut show = self.show_options;
-        egui::Panel::right("side")
+    fn options_window(&mut self, ui: &mut egui::Ui) {
+        if !self.show_options {
+            return;
+        }
+        let ctx = ui.ctx().clone();
+        let screen = ctx.content_rect();
+        let mut open = self.show_options;
+        egui::Window::new("Opciones del tablero")
+            .open(&mut open)
+            .default_pos(egui::pos2((screen.width() - 410.0).max(16.0), 96.0))
+            .default_size([390.0, 620.0])
+            .min_width(320.0)
+            .max_width(540.0)
             .resizable(true)
-            .default_size(370.0)
-            .max_size(460.0)
-            .show_collapsible(ui, &mut show, |ui| {
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| self.side_contents(ui));
-            });
-        self.show_options = show;
+            .collapsible(true)
+            .scroll([false, true])
+            .show(&ctx, |ui| self.options_contents(ui));
+        self.show_options = open;
     }
 
-    fn side_contents(&mut self, ui: &mut egui::Ui) {
+    fn options_contents(&mut self, ui: &mut egui::Ui) {
         if self.tabs.is_empty() {
             ui.label("No hay tableros abiertos.");
             return;
@@ -773,8 +777,9 @@ impl eframe::App for App {
 
         self.top_bar(ui);
         self.tab_bar(ui);
-        self.side_panel(ui);
         egui::CentralPanel::default().show(ui, |ui| self.board_view(ui));
+        // The options float above the board instead of stealing space from it.
+        self.options_window(ui);
     }
 }
 

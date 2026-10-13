@@ -12,9 +12,12 @@ binary, no browser, no web stack.
 
 ## What it does
 
-- **The board is the window.** It fills the space and is centred, and every
-  per-board option lives in a side panel that starts hidden — open it with the
-  **Opciones del tablero** toggle in the top bar.
+- **The board is the window.** It fills the space and is centred. Every
+  per-board option lives in a **floating window** that starts hidden — open it
+  with the **Opciones del tablero** toggle, then drag it anywhere, resize it, or
+  close it with its ✕.
+
+  ![options window](docs/options-window.png)
 - **One tab per board.** Every time you open an instance (`＋ Nuevo tablero`,
   and one automatically at startup) the GUI asks the daemon to create a real
   board and binds a tab to it.
