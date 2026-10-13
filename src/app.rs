@@ -847,7 +847,7 @@ fn piece_button(
         piece,
         &font,
         piece_font.glyphs,
-        1.0,
+        1.2,
     );
     response
 }

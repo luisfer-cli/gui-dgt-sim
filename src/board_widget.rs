@@ -206,7 +206,7 @@ pub fn show(
         cell * 0.5
     };
     let font = FontId::new(piece_size, piece_font.family.clone());
-    let shadow_offset = (cell * 0.035).max(1.0);
+    let outline_width = (cell * 0.02).clamp(1.0, 3.0);
     let dragged_from = drag.as_ref().map(|state| state.from);
     for (field, piece) in board.iter().enumerate() {
         let square = Square::from_field(field);
@@ -220,7 +220,7 @@ pub fn show(
                 piece,
                 &font,
                 piece_font.glyphs,
-                shadow_offset,
+                outline_width,
             );
         }
     }
@@ -233,7 +233,7 @@ pub fn show(
             state.piece,
             &font,
             piece_font.glyphs,
-            shadow_offset,
+            outline_width,
         );
     }
 
@@ -270,17 +270,21 @@ fn draw_coordinates(painter: &Painter, rect: Rect, cell: f32, flipped: bool) {
     }
 }
 
-/// Colours for a piece: the fill, and the offset "shadow" that keeps it
-/// readable on both square colours.
+/// Colours for a piece: the fill, plus an outline in the *inverse* tone.
+///
+/// The outline is what keeps a piece readable whatever square it stands on:
+/// a white piece's dark outline shows against the light squares and melts into
+/// the dark ones, and a black piece's light outline does the opposite. So each
+/// piece has an edge exactly where it needs one, and none where it does not.
 fn piece_colors(piece: Piece) -> (Color32, Color32) {
     match piece.color {
         Color::White => (
-            Color32::from_rgb(0xF8, 0xF8, 0xF8),
-            Color32::from_rgba_premultiplied(0, 0, 0, 120),
+            Color32::from_rgb(0xFA, 0xFA, 0xFA),
+            Color32::from_rgb(0x2B, 0x2B, 0x2B),
         ),
         Color::Black => (
-            Color32::from_rgb(0x1E, 0x1E, 0x1E),
-            Color32::from_rgba_premultiplied(255, 255, 255, 80),
+            Color32::from_rgb(0x1C, 0x1C, 0x1C),
+            Color32::from_rgb(0xEC, 0xEC, 0xEC),
         ),
     }
 }
@@ -291,21 +295,23 @@ fn piece_colors(piece: Piece) -> (Color32, Color32) {
 /// not on the font's line box. The line box carries ascent and descent that the
 /// glyph ink does not fill, so centring on it leaves every piece sitting a few
 /// pixels high; centring the ink puts it dead centre in the square.
+///
+/// `outline_width` is the thickness of the outline, in points; `0.0` disables it.
 pub fn paint_piece(
     painter: &Painter,
     center: Pos2,
     piece: Piece,
     font: &FontId,
     glyphs: bool,
-    shadow_offset: f32,
+    outline_width: f32,
 ) {
     let text = if glyphs {
         piece.glyph().to_string()
     } else {
         piece.letter().to_string()
     };
-    let (fill, shadow) = piece_colors(piece);
-    paint_glyph(painter, center, &text, font, fill, shadow, shadow_offset);
+    let (fill, outline) = piece_colors(piece);
+    paint_glyph(painter, center, &text, font, fill, outline, outline_width);
 }
 
 fn paint_glyph(
@@ -314,8 +320,8 @@ fn paint_glyph(
     text: &str,
     font: &FontId,
     fill: Color32,
-    shadow: Color32,
-    shadow_offset: f32,
+    outline: Color32,
+    outline_width: f32,
 ) {
     let galley = painter.layout_no_wrap(text.to_owned(), font.clone(), Color32::WHITE);
     let ink = galley.mesh_bounds;
@@ -325,8 +331,17 @@ fn paint_glyph(
         galley.rect
     };
     let pos = center - ink.center().to_vec2();
-    let offset = Vec2::splat(shadow_offset);
-    painter.galley_with_override_text_color(pos + offset, galley.clone(), shadow);
+    if outline_width > 0.0 {
+        // A uniform outline, cheaply: stamp the same glyph around a small
+        // circle in the outline colour, then draw the piece on top. The fill
+        // covers the inside; what is left is an even ring.
+        const STEPS: usize = 8;
+        for step in 0..STEPS {
+            let angle = std::f32::consts::TAU * (step as f32) / (STEPS as f32);
+            let offset = Vec2::new(angle.cos(), angle.sin()) * outline_width;
+            painter.galley_with_override_text_color(pos + offset, galley.clone(), outline);
+        }
+    }
     painter.galley_with_override_text_color(pos, galley, fill);
 }
 
