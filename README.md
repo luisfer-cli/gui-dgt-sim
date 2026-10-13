@@ -8,6 +8,8 @@ draggable chessboard.
 Built with [`eframe`/`egui`](https://github.com/emilk/egui) — a single Rust
 binary, no browser, no web stack.
 
+![gui-dgt-sim screenshot](docs/screenshot.png)
+
 ## What it does
 
 - **One tab per board.** Every time you open an instance (`＋ Nuevo tablero`,
