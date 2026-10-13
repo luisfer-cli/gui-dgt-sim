@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use egui::{Align, Color32, FontId, Layout, RichText};
 
-use crate::board_widget::{self, BoardAction, DragState, Palette};
+use crate::board_widget::{self, BoardAction, BoardColors, DragState, Palette};
 use crate::daemon::{Daemon, Tag};
 use crate::fonts::PieceFont;
 use crate::model::{self, Board, Color, Kind, Piece, Square};
@@ -109,6 +109,7 @@ pub struct App {
     status: String,
     last_poll: Instant,
     piece_font: PieceFont,
+    board_colors: BoardColors,
     show_options: bool,
     cleaned_up: bool,
 }
@@ -129,6 +130,7 @@ impl App {
             status: "Conectando con el daemon…".into(),
             last_poll: Instant::now() - POLL_INTERVAL,
             piece_font,
+            board_colors: BoardColors::default(),
             show_options: false,
             cleaned_up: false,
         };
@@ -412,6 +414,7 @@ impl App {
 
         let mut requests: Vec<Request> = Vec::new();
         let mut close = false;
+        let mut colors = self.board_colors;
 
         {
             let tab = &mut self.tabs[active];
@@ -688,6 +691,29 @@ impl App {
                     ui.checkbox(&mut tab.flipped, "Girar tablero (negras abajo)");
                 });
 
+            // ---- colores del tablero --------------------------------------
+            egui::CollapsingHeader::new("Colores del tablero")
+                .default_open(false)
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for (name, preset) in BoardColors::PRESETS {
+                            if ui.selectable_label(colors == *preset, *name).clicked() {
+                                colors = *preset;
+                            }
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Claras:");
+                        ui.color_edit_button_srgba(&mut colors.light);
+                        ui.separator();
+                        ui.label("Oscuras:");
+                        ui.color_edit_button_srgba(&mut colors.dark);
+                    });
+                    if ui.button("Restablecer").clicked() {
+                        colors = BoardColors::default();
+                    }
+                });
+
             // ---- mensajes -------------------------------------------------
             egui::CollapsingHeader::new("Mensajes del protocolo")
                 .default_open(false)
@@ -708,6 +734,7 @@ impl App {
                 });
         }
 
+        self.board_colors = colors;
         for request in requests {
             self.daemon.send(request, Tag::Mutate(tab_id));
         }
@@ -730,6 +757,7 @@ impl App {
         self.active = active;
 
         let piece_font = self.piece_font.clone();
+        let board_colors = self.board_colors;
         let tab = &mut self.tabs[active];
 
         // The board is the whole point of the window, so it gets all the space
@@ -748,6 +776,7 @@ impl App {
                         &mut tab.selected,
                         tab.last_move,
                         &piece_font,
+                        board_colors,
                     )
                 },
             )

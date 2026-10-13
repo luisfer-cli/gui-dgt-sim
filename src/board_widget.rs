@@ -36,12 +36,69 @@ pub struct DragState {
     pub pointer: Pos2,
 }
 
-const LIGHT: Color32 = Color32::from_rgb(0xE9, 0xEC, 0xD3);
-const DARK: Color32 = Color32::from_rgb(0x6F, 0x8B, 0x4E);
+/// The two square colours of the board.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BoardColors {
+    /// The lighter squares.
+    pub light: Color32,
+    /// The darker squares.
+    pub dark: Color32,
+}
+
+impl Default for BoardColors {
+    /// The classic green used by the emulator's own diagrams.
+    fn default() -> Self {
+        Self {
+            light: Color32::from_rgb(0xE9, 0xEC, 0xD3),
+            dark: Color32::from_rgb(0x6F, 0x8B, 0x4E),
+        }
+    }
+}
+
+impl BoardColors {
+    /// Ready-made palettes offered in the options.
+    pub const PRESETS: &'static [(&'static str, BoardColors)] = &[
+        (
+            "Verde",
+            BoardColors {
+                light: Color32::from_rgb(0xE9, 0xEC, 0xD3),
+                dark: Color32::from_rgb(0x6F, 0x8B, 0x4E),
+            },
+        ),
+        (
+            "Madera",
+            BoardColors {
+                light: Color32::from_rgb(0xF0, 0xD9, 0xB5),
+                dark: Color32::from_rgb(0xB5, 0x88, 0x63),
+            },
+        ),
+        (
+            "Azul",
+            BoardColors {
+                light: Color32::from_rgb(0xDE, 0xE3, 0xF0),
+                dark: Color32::from_rgb(0x6C, 0x88, 0xB8),
+            },
+        ),
+        (
+            "Gris",
+            BoardColors {
+                light: Color32::from_rgb(0xEC, 0xEC, 0xEC),
+                dark: Color32::from_rgb(0x8C, 0x8C, 0x8C),
+            },
+        ),
+        (
+            "Contraste",
+            BoardColors {
+                light: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+                dark: Color32::from_rgb(0x4A, 0x4A, 0x4A),
+            },
+        ),
+    ];
+}
+
 const LAST_MOVE: Color32 = Color32::from_rgba_premultiplied(0xF6, 0xE0, 0x6A, 0x88);
 const SELECTED: Color32 = Color32::from_rgba_premultiplied(0xF6, 0xE0, 0x6A, 0xB8);
 const HOVER: Color32 = Color32::from_rgb(0x2B, 0x2B, 0x2B);
-const COORD: Color32 = Color32::from_rgb(0x4A, 0x4A, 0x4A);
 
 /// Draw the board and handle interaction. Returns the action the user produced,
 /// if any.
@@ -55,6 +112,7 @@ pub fn show(
     selected: &mut Option<Square>,
     last_move: Option<(Square, Square)>,
     piece_font: &PieceFont,
+    colors: BoardColors,
 ) -> Option<BoardAction> {
     let available = ui.available_size();
     let size = available.x.min(available.y).clamp(180.0, 900.0);
@@ -176,7 +234,7 @@ pub fn show(
         painter.rect_filled(
             cell_rect(square),
             CornerRadius::ZERO,
-            if light { LIGHT } else { DARK },
+            if light { colors.light } else { colors.dark },
         );
     }
 
@@ -198,7 +256,7 @@ pub fn show(
         );
     }
 
-    draw_coordinates(&painter, rect, cell, flipped);
+    draw_coordinates(&painter, rect, cell, flipped, colors);
 
     let piece_size = if piece_font.glyphs {
         cell * 0.82
@@ -240,9 +298,11 @@ pub fn show(
     action
 }
 
-fn draw_coordinates(painter: &Painter, rect: Rect, cell: f32, flipped: bool) {
+fn draw_coordinates(painter: &Painter, rect: Rect, cell: f32, flipped: bool, colors: BoardColors) {
     let size = (cell * 0.24).clamp(9.0, 16.0);
     let font = FontId::proportional(size);
+    let bottom_rank = if flipped { 7 } else { 0 };
+    let left_file = if flipped { 7 } else { 0 };
     for i in 0..8u8 {
         let file = if flipped { 7 - i } else { i };
         let col = if flipped { 7 - file } else { file };
@@ -253,7 +313,7 @@ fn draw_coordinates(painter: &Painter, rect: Rect, cell: f32, flipped: bool) {
             Align2::LEFT_BOTTOM,
             (b'a' + file) as char,
             font.clone(),
-            COORD,
+            coordinate_color(Square { file, rank: bottom_rank }, colors),
         );
 
         let rank = if flipped { 7 - i } else { i };
@@ -265,9 +325,17 @@ fn draw_coordinates(painter: &Painter, rect: Rect, cell: f32, flipped: bool) {
             Align2::LEFT_TOP,
             (rank + 1).to_string(),
             font.clone(),
-            COORD,
+            coordinate_color(Square { file: left_file, rank }, colors),
         );
     }
+}
+
+/// The coordinate label takes the *opposite* square colour, so it always
+/// contrasts with whatever square it happens to sit on, for any palette.
+fn coordinate_color(square: Square, colors: BoardColors) -> Color32 {
+    let light = (square.file + square.rank) % 2 == 1;
+    let base = if light { colors.dark } else { colors.light };
+    Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), 210)
 }
 
 /// Colours for a piece: the fill, plus an outline in the *inverse* tone.
@@ -392,9 +460,17 @@ mod tests {
                 ..Default::default()
             };
             let output = ctx.run_ui(input, |ui| {
-                if let Some(next) =
-                    show(ui, board, false, palette, &mut drag, &mut selected, None, &font)
-                {
+                if let Some(next) = show(
+                    ui,
+                    board,
+                    false,
+                    palette,
+                    &mut drag,
+                    &mut selected,
+                    None,
+                    &font,
+                    BoardColors::default(),
+                ) {
                     action = Some(next);
                 }
             });

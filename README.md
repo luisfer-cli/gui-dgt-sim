@@ -29,6 +29,9 @@ binary, no browser, no web stack.
   `Vaciar tablero` empties it, and a FEN box loads any placement.
 - **Place pieces freely.** Pick a piece from the palette and click squares to
   put it there, or use the eraser — useful to build arbitrary test positions.
+- **Change the board colours.** Pick a preset (green, wood, blue, grey, high
+  contrast) or set the light and dark squares by hand. The coordinate labels
+  invert automatically so they stay readable on any palette.
 - **Everything else the daemon exposes:** transfer modes, the emulated clock,
   connect/disconnect, fault injection, and the outbound protocol messages as
   hex, all from the side panel.
