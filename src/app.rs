@@ -109,6 +109,7 @@ pub struct App {
     status: String,
     last_poll: Instant,
     piece_font: PieceFont,
+    show_options: bool,
     cleaned_up: bool,
 }
 
@@ -128,6 +129,7 @@ impl App {
             status: "Conectando con el daemon…".into(),
             last_poll: Instant::now() - POLL_INTERVAL,
             piece_font,
+            show_options: false,
             cleaned_up: false,
         };
         app.daemon.send(Request::Info, Tag::Info);
@@ -290,6 +292,13 @@ impl App {
                         self.daemon.send(Request::Info, Tag::Info);
                         self.refresh_active();
                     }
+                    if ui
+                        .selectable_label(self.show_options, "Opciones del tablero")
+                        .on_hover_text("Mostrar u ocultar el panel de opciones")
+                        .clicked()
+                    {
+                        self.show_options = !self.show_options;
+                    }
                 });
             });
             let color = if self.info.is_some() {
@@ -340,7 +349,13 @@ impl App {
                     ui.horizontal(|ui| {
                         for (index, tab) in self.tabs.iter().enumerate() {
                             let selected = index == self.active;
-                            let label = format!("Tablero {}", tab.board);
+                            let connected =
+                                tab.snapshot.as_ref().is_some_and(|snapshot| snapshot.connected);
+                            let label = if connected {
+                                format!("● Tablero {}", tab.board)
+                            } else {
+                                format!("Tablero {}", tab.board)
+                            };
                             if ui.selectable_label(selected, label).clicked() {
                                 select = Some(index);
                             }
@@ -366,15 +381,19 @@ impl App {
     }
 
     fn side_panel(&mut self, ui: &mut egui::Ui) {
+        // `show_collapsible` needs `&mut bool`, and the closure borrows `self`,
+        // so the flag is moved out and back.
+        let mut show = self.show_options;
         egui::Panel::right("side")
             .resizable(true)
             .default_size(370.0)
             .max_size(460.0)
-            .show(ui, |ui| {
+            .show_collapsible(ui, &mut show, |ui| {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| self.side_contents(ui));
             });
+        self.show_options = show;
     }
 
     fn side_contents(&mut self, ui: &mut egui::Ui) {
@@ -709,37 +728,25 @@ impl App {
         let piece_font = self.piece_font.clone();
         let tab = &mut self.tabs[active];
 
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("Tablero {}", tab.board)).heading());
-            if let Some(snapshot) = &tab.snapshot {
-                ui.label(
-                    RichText::new(format!("· {} · {}", snapshot.transport, snapshot.endpoint))
-                        .monospace(),
-                );
-                if snapshot.connected {
-                    ui.label(
-                        RichText::new("· cliente conectado")
-                            .color(Color32::from_rgb(0x7A, 0xD1, 0x6A)),
-                    );
-                }
-            }
-        });
-        ui.add_space(4.0);
-
+        // The board is the whole point of the window, so it gets all the space
+        // that is left and is centred in it. Everything else lives in the side
+        // panel, which starts hidden.
         let action = ui
-            .with_layout(egui::Layout::top_down(Align::Center), |ui| {
-                board_widget::show(
-                    ui,
-                    &tab.position,
-                    tab.flipped,
-                    tab.palette,
-                    &mut tab.drag,
-                    &mut tab.selected,
-                    tab.last_move,
-                    &piece_font,
-                )
-            })
+            .with_layout(
+                egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                |ui| {
+                    board_widget::show(
+                        ui,
+                        &tab.position,
+                        tab.flipped,
+                        tab.palette,
+                        &mut tab.drag,
+                        &mut tab.selected,
+                        tab.last_move,
+                        &piece_font,
+                    )
+                },
+            )
             .inner;
         if let Some(action) = action {
             self.play(active, action);
@@ -789,11 +796,7 @@ fn palette_ui(ui: &mut egui::Ui, palette: &mut Option<Palette>, piece_font: &Pie
                 for kind in order {
                     let piece = Piece::new(color, kind);
                     let selected = *palette == Some(Palette::Piece(piece));
-                    let text = piece_button_text(piece, piece_font);
-                    if ui
-                        .add_sized([40.0, 36.0], egui::Button::new(text).selected(selected))
-                        .clicked()
-                    {
+                    if piece_button(ui, piece, selected, piece_font).clicked() {
                         *palette = if selected {
                             None
                         } else {
@@ -820,13 +823,33 @@ fn palette_ui(ui: &mut egui::Ui, palette: &mut Option<Palette>, piece_font: &Pie
     }
 }
 
-fn piece_button_text(piece: Piece, piece_font: &PieceFont) -> RichText {
-    let text = if piece_font.glyphs {
-        piece.glyph().to_string()
-    } else {
-        piece.letter().to_string()
-    };
-    RichText::new(text).font(FontId::new(24.0, piece_font.family.clone()))
+/// A palette button that paints the piece with the same ink-centred glyph as
+/// the board, so both line up identically.
+fn piece_button(
+    ui: &mut egui::Ui,
+    piece: Piece,
+    selected: bool,
+    piece_font: &PieceFont,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(40.0, 34.0), egui::Sense::click());
+    if selected || response.hovered() {
+        let fill = if selected {
+            ui.visuals().selection.bg_fill
+        } else {
+            ui.visuals().widgets.hovered.weak_bg_fill
+        };
+        ui.painter().rect_filled(rect, 4.0, fill);
+    }
+    let font = FontId::new(24.0, piece_font.family.clone());
+    board_widget::paint_piece(
+        ui.painter(),
+        rect.center(),
+        piece,
+        &font,
+        piece_font.glyphs,
+        1.0,
+    );
+    response
 }
 
 fn promotion_label(value: char) -> &'static str {

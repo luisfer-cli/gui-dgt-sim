@@ -57,7 +57,7 @@ pub fn show(
     piece_font: &PieceFont,
 ) -> Option<BoardAction> {
     let available = ui.available_size();
-    let size = available.x.min(available.y).clamp(180.0, 780.0);
+    let size = available.x.min(available.y).clamp(180.0, 900.0);
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click_and_drag());
     let cell = size / 8.0;
 
@@ -206,6 +206,7 @@ pub fn show(
         cell * 0.5
     };
     let font = FontId::new(piece_size, piece_font.family.clone());
+    let shadow_offset = (cell * 0.035).max(1.0);
     let dragged_from = drag.as_ref().map(|state| state.from);
     for (field, piece) in board.iter().enumerate() {
         let square = Square::from_field(field);
@@ -213,26 +214,26 @@ pub fn show(
             continue;
         }
         if let Some(piece) = *piece {
-            draw_piece(
+            paint_piece(
                 &painter,
                 cell_rect(square).center(),
                 piece,
                 &font,
-                cell,
                 piece_font.glyphs,
+                shadow_offset,
             );
         }
     }
     // The dragged piece follows the cursor, drawn unclipped so it does not
     // vanish when the pointer leaves the board.
     if let Some(state) = drag.as_ref() {
-        draw_piece(
+        paint_piece(
             ui.painter(),
             state.pointer,
             state.piece,
             &font,
-            cell,
             piece_font.glyphs,
+            shadow_offset,
         );
     }
 
@@ -269,15 +270,10 @@ fn draw_coordinates(painter: &Painter, rect: Rect, cell: f32, flipped: bool) {
     }
 }
 
-fn draw_piece(
-    painter: &Painter,
-    center: Pos2,
-    piece: Piece,
-    font: &FontId,
-    cell: f32,
-    glyphs: bool,
-) {
-    let (fill, shadow) = match piece.color {
+/// Colours for a piece: the fill, and the offset "shadow" that keeps it
+/// readable on both square colours.
+fn piece_colors(piece: Piece) -> (Color32, Color32) {
+    match piece.color {
         Color::White => (
             Color32::from_rgb(0xF8, 0xF8, 0xF8),
             Color32::from_rgba_premultiplied(0, 0, 0, 120),
@@ -286,21 +282,52 @@ fn draw_piece(
             Color32::from_rgb(0x1E, 0x1E, 0x1E),
             Color32::from_rgba_premultiplied(255, 255, 255, 80),
         ),
-    };
+    }
+}
+
+/// Paint a piece centred on `center`.
+///
+/// Text is centred on the glyph's *tight ink bounds* ([`egui::Galley::mesh_bounds`]),
+/// not on the font's line box. The line box carries ascent and descent that the
+/// glyph ink does not fill, so centring on it leaves every piece sitting a few
+/// pixels high; centring the ink puts it dead centre in the square.
+pub fn paint_piece(
+    painter: &Painter,
+    center: Pos2,
+    piece: Piece,
+    font: &FontId,
+    glyphs: bool,
+    shadow_offset: f32,
+) {
     let text = if glyphs {
         piece.glyph().to_string()
     } else {
         piece.letter().to_string()
     };
-    let offset = (cell * 0.035).max(1.0);
-    painter.text(
-        center + Vec2::new(offset, offset),
-        Align2::CENTER_CENTER,
-        &text,
-        font.clone(),
-        shadow,
-    );
-    painter.text(center, Align2::CENTER_CENTER, &text, font.clone(), fill);
+    let (fill, shadow) = piece_colors(piece);
+    paint_glyph(painter, center, &text, font, fill, shadow, shadow_offset);
+}
+
+fn paint_glyph(
+    painter: &Painter,
+    center: Pos2,
+    text: &str,
+    font: &FontId,
+    fill: Color32,
+    shadow: Color32,
+    shadow_offset: f32,
+) {
+    let galley = painter.layout_no_wrap(text.to_owned(), font.clone(), Color32::WHITE);
+    let ink = galley.mesh_bounds;
+    let ink = if ink.width() > 0.0 && ink.height() > 0.0 {
+        ink
+    } else {
+        galley.rect
+    };
+    let pos = center - ink.center().to_vec2();
+    let offset = Vec2::splat(shadow_offset);
+    painter.galley_with_override_text_color(pos + offset, galley.clone(), shadow);
+    painter.galley_with_override_text_color(pos, galley, fill);
 }
 
 #[cfg(test)]
